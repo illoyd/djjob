@@ -4,7 +4,16 @@
 
 class DJException extends Exception { }
 
-class DJRetryException extends DJException { }
+class DJRetryException extends DJException {
+    public function __construct($interval = null, $message = null, $code = 0, Exception $previous = null)
+    {
+      // Pass to parent constructor
+      parent::__construct($message, $code, $previous);
+      
+      // Save interval
+      $this->interval = $interval;
+    }
+}
 
 class DJBase {
     
@@ -193,7 +202,7 @@ class DJJob extends DJBase {
         } catch (DJRetryException $e) {
             
             # signal that this job should be retried later
-            $this->retryLater();
+            $this->retryLater( $e->interval );
             return false;
             
         } catch (Exception $e) {
@@ -256,12 +265,13 @@ class DJJob extends DJBase {
         $this->releaseLock();
     }
     
-    public function retryLater() {
+    public function retryLater($interval = null) {
+        if ( $interval === null ) $interval = '2 HOUR';
         $this->runUpdate("
             UPDATE jobs
-            SET run_at = DATE_ADD(NOW(), INTERVAL 2 HOUR)
+            SET run_at = DATE_ADD(NOW(), INTERVAL $interval)
             WHERE id = ?",
-            array($this->job_id)
+            array($interval, $this->job_id)
         );
         $this->releaseLock();
     }
