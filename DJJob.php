@@ -271,7 +271,7 @@ class DJJob extends DJBase {
             UPDATE jobs
             SET run_at = DATE_ADD(NOW(), INTERVAL $interval)
             WHERE id = ?",
-            array($interval, $this->job_id)
+            array($this->job_id)
         );
         $this->releaseLock();
     }
