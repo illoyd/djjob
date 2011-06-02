@@ -275,7 +275,7 @@ class DJJob extends DJBase {
         return false;
     }
     
-    public static function enqueue($handler, $queue = "default", $run_at = null, $priority = 9) {
+    public static function enqueue($handler, $queue = "default", $priority = 9, $run_at = null) {
         $affected = self::runUpdate(
             "INSERT INTO jobs (handler, queue, priority, run_at, created_at) VALUES(?, ?, ?, ?, NOW())",
             array(serialize($handler), (string) $queue, $priority, $run_at)
@@ -289,7 +289,7 @@ class DJJob extends DJBase {
         return true;
     }
     
-    public static function bulkEnqueue($handlers, $queue = "default", $run_at = null, $priority = 9) {
+    public static function bulkEnqueue($handlers, $queue = "default", $priority = 9, $run_at = null) {
         $sql = "INSERT INTO jobs (handler, queue, run_at, created_at) VALUES";
         $sql .= implode(",", array_fill(0, count($handlers), "(?, ?, ?, ?, NOW())"));
         
