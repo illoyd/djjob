@@ -119,7 +119,7 @@ class DJWorker extends DJBase {
             WHERE  queue = ?
             AND    (run_at IS NULL OR NOW() >= run_at)
             AND    (locked_at IS NULL OR locked_by = ?) AND failed_at IS NULL
-            ORDER BY RAND()
+            ORDER BY priority, RAND()
             LIMIT  5
         ", array($this->queue, $this->name));
         
@@ -275,10 +275,10 @@ class DJJob extends DJBase {
         return false;
     }
     
-    public static function enqueue($handler, $queue = "default", $run_at = null) {
+    public static function enqueue($handler, $queue = "default", $run_at = null, $priority = 9) {
         $affected = self::runUpdate(
-            "INSERT INTO jobs (handler, queue, run_at, created_at) VALUES(?, ?, ?, NOW())",
-            array(serialize($handler), (string) $queue, $run_at)
+            "INSERT INTO jobs (handler, queue, priority, run_at, created_at) VALUES(?, ?, ?, ?, NOW())",
+            array(serialize($handler), (string) $queue, $priority, $run_at)
         );
         
         if ($affected < 1) {
@@ -289,14 +289,15 @@ class DJJob extends DJBase {
         return true;
     }
     
-    public static function bulkEnqueue($handlers, $queue = "default", $run_at = null) {
+    public static function bulkEnqueue($handlers, $queue = "default", $run_at = null, $priority = 9) {
         $sql = "INSERT INTO jobs (handler, queue, run_at, created_at) VALUES";
-        $sql .= implode(",", array_fill(0, count($handlers), "(?, ?, ?, NOW())"));
+        $sql .= implode(",", array_fill(0, count($handlers), "(?, ?, ?, ?, NOW())"));
         
         $parameters = array();
         foreach ($handlers as $handler) {
             $parameters []= serialize($handler);
             $parameters []= (string) $queue;
+            $parameters []= $priority;
             $parameters []= $run_at;
         }
         $affected = self::runUpdate($sql, $parameters);
