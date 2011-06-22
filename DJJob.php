@@ -5,7 +5,10 @@
 class DJException extends Exception { }
 
 class DJRetryException extends DJException {
-    public function __construct($interval = null, $message = null, $code = 0, Exception $previous = null)
+  public $interval = null;
+  public $updateHandler = false;
+  public $is_failure = false;
+    public function __construct( $interval = null, $message = null, $code = 0, Exception $previous = null )
     {
       // Pass to parent constructor
       parent::__construct($message, $code, $previous);
@@ -203,14 +206,23 @@ class DJJob extends DJBase {
             return true;
             
         } catch (DJRetryException $e) {
-            
+
             # signal that this job should be retried later
-            $this->retryLater( $e->interval );
+            $h = $e->updateHandler ? $handler : null;
+            $this->retryLater( $e->interval, $h, !$e->is_failure );
+            
+            # Mark as a failure
+            if ( $e->is_failure )
+            {
+              $error = sprintf( '%s (%s:%d)', $e->getMessage(), $e->getFile(), $e->getLine() );
+              $this->finishWithError($error);
+            }
             return false;
             
         } catch (Exception $e) {
             
-            $this->finishWithError($e->getMessage());
+            $error = sprintf( '%s (%s:%d)', $e->getMessage(), $e->getFile(), $e->getLine() );
+            $this->finishWithError($error);
             return false;
             
         }
@@ -250,7 +262,7 @@ class DJJob extends DJBase {
         $this->log("* [JOB] completed job::{$this->job_id}");
     }
     
-    public function finishWithError($error) {
+    public function finishWithError($error, $unlock=true) {
         $this->runUpdate("
             UPDATE jobs
             SET attempts = attempts + 1,
@@ -265,18 +277,32 @@ class DJJob extends DJBase {
             )
         );
         $this->log("* [JOB] failure in job::{$this->job_id}");
-        $this->releaseLock();
+        
+        if ( $unlock )
+          $this->releaseLock();
     }
     
-    public function retryLater($interval = null) {
+    public function retryLater($interval = null, $handler = null, $unlock=true) {
         if ( $interval === null ) $interval = '2 HOUR';
-        $this->runUpdate("
-            UPDATE jobs
-            SET run_at = DATE_ADD(NOW(), INTERVAL $interval)
-            WHERE id = ?",
-            array($this->job_id)
-        );
-        $this->releaseLock();
+        
+        if ( $handler != null )
+          $this->runUpdate("
+              UPDATE jobs
+              SET run_at = DATE_ADD(NOW(), INTERVAL $interval),
+                handler = ?
+              WHERE id = ?",
+              array( serialize($handler), $this->job_id )
+          );
+        else
+          $this->runUpdate("
+              UPDATE jobs
+              SET run_at = DATE_ADD(NOW(), INTERVAL $interval)
+              WHERE id = ?",
+              array($this->job_id)
+          );
+
+        if ( $unlock )
+          $this->releaseLock();
     }
     
     public function getHandler() {
