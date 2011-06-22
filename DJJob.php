@@ -127,7 +127,10 @@ class DJWorker extends DJBase {
             FROM   jobs
             WHERE  queue = ?
             AND    (run_at IS NULL OR NOW() >= run_at)
-            AND    (locked_at IS NULL OR locked_by = ?) AND failed_at IS NULL
+            AND    (locked_at IS NULL
+                    OR locked_at < DATE_SUB(NOW(),INTERVAL 4 HOUR)
+                    OR locked_by = ?)
+            AND failed_at IS NULL
             ORDER BY priority, RAND()
             LIMIT  5
         ", array($this->queue, $this->name));
@@ -219,7 +222,7 @@ class DJJob extends DJBase {
         $lock = $this->runUpdate("
             UPDATE jobs
             SET    locked_at = NOW(), locked_by = ?
-            WHERE  id = ? AND (locked_at IS NULL OR locked_by = ?) AND failed_at IS NULL
+            WHERE  id = ? AND (locked_at IS NULL OR locked_at < DATE_SUB(NOW(),INTERVAL 4 HOUR) OR locked_by = ?) AND failed_at IS NULL
         ", array($this->worker_name, $this->job_id, $this->worker_name));
         
         if (!$lock) {
